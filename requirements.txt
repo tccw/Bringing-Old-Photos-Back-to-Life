@@ -1,4 +1,7 @@
+cmake
 dlib
+torch
+torchvision
 scikit-image
 easydict
 PyYAML
