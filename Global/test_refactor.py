@@ -7,6 +7,7 @@ from torch.autograd import Variable
 from options.test_options import TestOptions
 from models.models import create_model
 from models.mapping_model import Pix2PixHDModel_Mapping
+from pathlib import Path
 import util.util as util
 from PIL import Image
 import torch
@@ -16,8 +17,7 @@ import torchvision.transforms as transforms
 import numpy as np
 
 
-def data_transforms(img, method=Image.BILINEAR, scale=False):
-
+def _data_transforms(img, method=Image.BILINEAR, scale=False):
     ow, oh = img.size
     pw, ph = ow, oh
     if scale == True:
@@ -37,7 +37,7 @@ def data_transforms(img, method=Image.BILINEAR, scale=False):
     return img.resize((w, h), method)
 
 
-def data_transforms_rgb_old(img):
+def _data_transforms_rgb_old(img):
     w, h = img.size
     A = img
     if w < 256 or h < 256:
@@ -45,8 +45,7 @@ def data_transforms_rgb_old(img):
     return transforms.CenterCrop(256)(A)
 
 
-def irregular_hole_synthesize(img, mask):
-
+def _irregular_hole_synthesize(img, mask):
     img_np = np.array(img).astype("uint8")
     mask_np = np.array(mask).astype("uint8")
     mask_np = mask_np / 255
@@ -57,7 +56,7 @@ def irregular_hole_synthesize(img, mask):
     return hole_img
 
 
-def parameter_set(opt):
+def _parameter_set(opt):
     ## Default parameters
     opt.serial_batches = True  # no shuffle
     opt.no_flip = True  # no flip
@@ -73,12 +72,12 @@ def parameter_set(opt):
     ##
 
     if opt.Quality_restore:
-        quality_config(opt)
+        _quality_config(opt)
     if opt.Scratch_and_Quality_restore:
-        scratch_and_quality_config(opt)
+        _scratch_and_quality_config(opt)
 
 
-def scratch_and_quality_config(opt):
+def _scratch_and_quality_config(opt):
     opt.NL_res = True
     opt.use_SN = True
     opt.correlation_renormalize = True
@@ -90,39 +89,27 @@ def scratch_and_quality_config(opt):
     opt.load_pretrainB = os.path.join(opt.checkpoints_dir, "VAE_B_scratch")
 
 
-def quality_config(opt):
+def _quality_config(opt):
     opt.name = "mapping_quality"
     opt.load_pretrainA = os.path.join(opt.checkpoints_dir, "VAE_A_quality")
     opt.load_pretrainB = os.path.join(opt.checkpoints_dir, "VAE_B_quality")
 
 
-if __name__ == "__main__":
-
-    opt = TestOptions().parse(save=False)
-    parameter_set(opt)
-
+def repair(input_dir: Path, output_dir: Path, scratched=False):
     model = Pix2PixHDModel_Mapping()
 
-    model.initialize(opt)
+    model.initialize(opt)  #TODO this is a problem
     model.eval()
 
-    if not os.path.exists(opt.outputs_dir + "/" + "input_image"):
-        os.makedirs(opt.outputs_dir + "/" + "input_image")
-    if not os.path.exists(opt.outputs_dir + "/" + "restored_image"):
-        os.makedirs(opt.outputs_dir + "/" + "restored_image")
-    if not os.path.exists(opt.outputs_dir + "/" + "origin"):
-        os.makedirs(opt.outputs_dir + "/" + "origin")
+    input_loader: [Path] = [path for path in input_dir.iterdir()]
+    input_loader.sort()  # sorted purely for printing purposes
 
-    dataset_size = 0
-
-    input_loader = os.listdir(opt.test_input)
-    dataset_size = len(os.listdir(opt.test_input))
-    input_loader.sort()
-
-    if opt.test_mask != "":
-        mask_loader = os.listdir(opt.test_mask)
-        dataset_size = len(os.listdir(opt.test_mask))
+    if scratched:
+        mask_loader = [path for path in (output_dir / 'stage_1_restore_output/masks/mask').iterdir()]
         mask_loader.sort()
+        dataset_size = len(mask_loader)
+    else:
+        dataset_size = len(input_loader)
 
     img_transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
@@ -131,57 +118,50 @@ if __name__ == "__main__":
 
     for i in range(dataset_size):
 
-        input_name = input_loader[i]
-        input = Image.open(os.path.join(opt.test_input, input_name)).convert("RGB")
+        input_img = Image.open(input_loader[i]).convert("RGB")
 
-        print("Now you are processing %s" % (input_name))
+        print("Now you are processing %s".format(input_loader[i].name))
 
-        if opt.NL_use_mask:
-            mask_name = mask_loader[i]
-            mask = Image.open(os.path.join(opt.test_mask, mask_name)).convert("RGB")
-            origin = input
-            input = irregular_hole_synthesize(input, mask)
-            mask = mask_transform(mask)
+        if scratched:
+            mask = Image.open(mask_loader[i]).convert("RGB")
+            origin = input_img
+            input_img = _irregular_hole_synthesize(input_img, mask)
+            mask = mask_transform(mask)[:1, :, :]
             mask = mask[:1, :, :]  ## Convert to single channel
             mask = mask.unsqueeze(0)
-            input = img_transform(input)
-            input = input.unsqueeze(0)
+            input_img = img_transform(input_img)
+            input_img = input_img.unsqueeze(0)
         else:
-            if opt.test_mode == "Scale":
-                input = data_transforms(input, scale=True)
-            if opt.test_mode == "Full":
-                input = data_transforms(input, scale=False)
-            if opt.test_mode == "Crop":
-                input = data_transforms_rgb_old(input)
-            origin = input
-            input = img_transform(input)
-            input = input.unsqueeze(0)
-            mask = torch.zeros_like(input)
+            input_img = _data_transforms(input_img, scale=False)  # consider full res version only
+            origin = input_img
+            input_img = img_transform(input_img)
+            input_img = input_img.unsqueeze(0)
+            mask = torch.zeros_like(input_img)
         ### Necessary input
 
         try:
-            generated = model.inference(input, mask)
-        except:
-            print("Skip %s" % (input_name))
+            generated = model.inference(input_img, mask)
+        except Exception as e:
+            print("Skip %s".format(input_loader[i]))
+            print(e)
             continue
 
-        if input_name.endswith(".jpg"):
-            input_name = input_name[:-4] + ".png"
+        if str(input_loader[i]).endswith(".jpg"):
+            input_loader[i] = input_loader[i][:-4] + ".png"
 
         image_grid = vutils.save_image(
-            (input + 1.0) / 2.0,
-            opt.outputs_dir + "/input_image/" + input_name,
+            (input_img + 1.0) / 2.0,
+            output_dir / "input_image" / input_loader[i].name,
             nrow=1,
             padding=0,
             normalize=True,
         )
         image_grid = vutils.save_image(
             (generated.data.cpu() + 1.0) / 2.0,
-            opt.outputs_dir + "/restored_image/" + input_name,
+            output_dir / "restored_image" / input_loader[i].name,
             nrow=1,
             padding=0,
             normalize=True,
         )
 
-        origin.save(opt.outputs_dir + "/origin/" + input_name)
-
+        origin.save(output_dir / "origin" / input_loader[i].name)

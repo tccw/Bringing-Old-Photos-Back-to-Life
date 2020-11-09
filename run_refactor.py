@@ -6,8 +6,10 @@ import argparse
 import shutil
 from pathlib import Path
 
+from Global.test_refactor import repair
 
-def print_run_stage(n: int, stage_name: str):
+
+def print_run_stage(n: int, stage_name: str) -> None:
     print("Running Stage {}: {}".format(n, stage_name))
 
 
@@ -15,11 +17,11 @@ def print_stage(n: int) -> None:
     print("Finish stage {}...\n".format(n))
 
 
-def mk_output_dirs(output_folder: Path) -> (Path, Path, Path, Path):
-    stage_1_out_dir = output_folder / "stage_1_restore_output"
-    stage_2_out_dir = output_folder / "stage_2_detection_output"
-    stage_3_out_dir = output_folder / "stage_3_face_output"
-    final_output = output_folder / "final_output"
+def mk_output_dirs(output_dir: Path) -> (Path, Path, Path, Path):
+    stage_1_out_dir = output_dir / "stage_1_restore_output"
+    stage_2_out_dir = output_dir / "stage_2_detection_output"
+    stage_3_out_dir = output_dir / "stage_3_face_output"
+    final_output = output_dir / "final_output"
 
     (stage_3_out_dir / 'each_img').mkdir(parents=True, exist_ok=True)
     for p in (stage_1_out_dir, stage_2_out_dir, final_output):
@@ -60,45 +62,35 @@ if __name__ == "__main__":
 
     # Stage 1: Overall Quality Improve
     print_run_stage(1, 'Overall restoration')
-    stage_1_input_dir = Path(opts.input_folder)
-    stage_1_output_dir = Path(opts.output_folder) / "stage_1_restore_output"
-    Path.mkdir(stage_1_output_dir, parents=True, exist_ok=True)
-
-    if not opts.with_scratch:
-    # run test.py functions without scratch repair
-    else:
-    # run test.py with scratch repair
-
+    if opts.with_scratch:
+        # detection.py run
+    
+    repair(input_folder, output_folder, scratched=bool(opts.with_scratch))
+    # TODO determine if model cna be freed after each phase to reduce VRAM requirements
     # Solve the case when there is no face in the old photo
-    stage_1_results = Path(stage_1_output_dir) / "restored_image"
-    stage_4_output_dir = Path(opts.output_folder) / "final_output"
-    Path.mkdir(stage_4_output_dir, parents=True, exist_ok=True)
-    for image in stage_1_results.iterdir():
-        shutil.copy(image, stage_4_output_dir)
+    for image in (stage_1_output_dir / "restored_image").iterdir():
+        shutil.copy(image, output_folder / "final_output")
 
     print_stage(1)
 
     # Stage 2: Face Detection
     print_run_stage(2, "Face Detection")
-    os.chdir(".././Face_Detection")
-    stage_2_input_dir = stage_1_output_dir / "restored_image"
-    stage_2_output_dir = Path(opts.output_folder) / "stage_2_detection_output"
-    Path.mkdir(stage_2_output_dir, parents=True, exist_ok=True)
+    # os.chdir(".././Face_Detection")
+    # stage_2_input_dir = stage_1_output_dir / "restored_image"
+    # stage_2_output_dir = Path(opts.output_folder) / "stage_2_detection_output"
+    # Path.mkdir(stage_2_output_dir, parents=True, exist_ok=True)
 
-    stage_2_command = (
-            "python3 detect_all_dlib.py --url " + stage_2_input_dir + " --save_url " + stage_2_output_dir
-    )
-    os.system(stage_2_command)
+    # run detect_all_dlib.py --url " + stage_2_input_dir + " --save_url " + stage_2_output_dir
+
     print_stage(2)
 
     # Stage 3: Face Restore
     print_run_stage(3, 'Face Enhancement')
-    os.chdir(".././Face_Enhancement")
-    stage_3_input_mask = "./"
-    stage_3_input_face = stage_2_output_dir
-    stage_3_output_dir = os.path.join(opts.output_folder, "stage_3_face_output")
-    if not os.path.exists(stage_3_output_dir):
-        os.makedirs(stage_3_output_dir)
+    # os.chdir(".././Face_Enhancement")
+    # stage_3_input_mask = "./"
+    # stage_3_input_face = stage_2_output_dir
+    # stage_3_output_dir = os.path.join(opts.output_folder, "stage_3_face_output")
+
     # run test_face.py
 
     print_stage(3)
@@ -106,20 +98,8 @@ if __name__ == "__main__":
     # Stage 4: Warp back
     print_run_stage(4, 'Blending')
     os.chdir(".././Face_Detection")
-    stage_4_input_image_dir = os.path.join(stage_1_output_dir, "restored_image")
-    stage_4_input_face_dir = os.path.join(stage_3_output_dir, "each_img")
-    stage_4_output_dir = os.path.join(opts.output_folder, "final_output")
-    if not os.path.exists(stage_4_output_dir):
-        os.makedirs(stage_4_output_dir)
-    stage_4_command = (
-            "python3 align_warp_back_multiple_dlib.py --origin_url "
-            + stage_4_input_image_dir
-            + " --replace_url "
-            + stage_4_input_face_dir
-            + " --save_url "
-            + stage_4_output_dir
-    )
-    os.system(stage_4_command)
+
+    # run  align_warp_back_multiple_dlib.py
     print_stage(4)
 
     print("All the processing is done. Please check the results.")
