@@ -1,6 +1,5 @@
-cmake
+setuptools
 dlib
-torch
 torchvision
 scikit-image
 easydict
@@ -10,3 +9,4 @@ dill
 tensorboardX
 scipy
 opencv-python
+

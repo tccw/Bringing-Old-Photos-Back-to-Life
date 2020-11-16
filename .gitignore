@@ -1,0 +1,5 @@
+/Global/checkpoints/
+/Face_Enhancement/checkpoints/
+/Face_Detection/shape_predictor_68_face_landmarks.dat
+/imgs/output_folder/
+/imgs/input_folder/

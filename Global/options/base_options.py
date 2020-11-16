@@ -3,7 +3,7 @@
 
 import argparse
 import os
-from util import util
+from Global.util import util
 import torch
 
 
@@ -332,9 +332,11 @@ class BaseOptions:
         self.initialized = True
 
     def parse(self, save=True):
+        print('PARSE')
         if not self.initialized:
             self.initialize()
-        self.opt = self.parser.parse_args()
+        # self.opt = self.parser.parse_args()
+        self.opt = self.parser.parse_known_args()
         self.opt.isTrain = self.isTrain  # train or test
 
         str_ids = self.opt.gpu_ids.split(",")

@@ -52,6 +52,7 @@ if __name__ == "__main__":
 
     gpu1 = opts.GPU
 
+
     output_folder = Path(opts.output_folder)
     input_folder = Path(opts.input_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -62,11 +63,9 @@ if __name__ == "__main__":
 
     # Stage 1: Overall Quality Improve
     print_run_stage(1, 'Overall restoration')
-    if opts.with_scratch:
-        # detection.py run
-    
+
     repair(input_folder, output_folder, scratched=bool(opts.with_scratch))
-    # TODO determine if model cna be freed after each phase to reduce VRAM requirements
+    # TODO determine if model can be freed after each phase to reduce VRAM requirements
     # Solve the case when there is no face in the old photo
     for image in (stage_1_output_dir / "restored_image").iterdir():
         shutil.copy(image, output_folder / "final_output")

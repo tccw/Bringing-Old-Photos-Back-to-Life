@@ -4,11 +4,11 @@
 import os
 from collections import OrderedDict
 from torch.autograd import Variable
-from options.test_options import TestOptions
-from models.models import create_model
-from models.mapping_model import Pix2PixHDModel_Mapping
+from .options.test_options import TestOptions
+from .models.models import create_model
+from .models.mapping_model import Pix2PixHDModel_Mapping
 from pathlib import Path
-import util.util as util
+import Global.util.util as util
 from PIL import Image
 import torch
 import torchvision.utils as vutils
@@ -96,9 +96,12 @@ def _quality_config(opt):
 
 
 def repair(input_dir: Path, output_dir: Path, scratched=False):
+    opt = TestOptions().parse(save=False)
+    _parameter_set(opt)
+
     model = Pix2PixHDModel_Mapping()
 
-    model.initialize(opt)  #TODO this is a problem
+    model.initialize(opt)  #TODO refactor to take dictionary?
     model.eval()
 
     input_loader: [Path] = [path for path in input_dir.iterdir()]
